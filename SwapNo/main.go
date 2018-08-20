@@ -96,7 +96,6 @@ func startProcess(url string){
             ImportUser(url, int(check_time))
         }()
         check_time = check_time + 1
-        serviceLogger(fmt.Sprintf("[Count]Success: %d", int(Success)), 32)
         timeSleep(CheckRate)
     }
 }
@@ -145,8 +144,13 @@ func ImportUser(url string, round int) error{
     body = body
     serviceLogger(fmt.Sprintf("[%d]Done~", round), 32)
     //serviceLogger(fmt.Sprintf("[%d]Result: %s", round, string(body)), 32)
-    Success = Success + 1
+    addSuccess()
     return nil
+}
+
+func addSuccess(){
+    Success = Success + 1
+    serviceLogger(fmt.Sprintf("[Count]Success: %d", int(Success)), 32)
 }
 
 func loadProxy(){
@@ -285,7 +289,7 @@ func checkLogOverSized(){
 func getSize(path string) int64 {
     fileInfo, err := os.Stat(path)
     if err != nil {
-        serviceLogger(fmt.Sprintf("Error: %v!", err), 31)
+        fmt.Printf("%c[1;0;%dm%s%c[0m\n", 0x1B, 31, fmt.Sprintf("Error: %v !", err), 0x1B)
         return 0
     }
     fileSize := fileInfo.Size()
