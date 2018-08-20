@@ -18,7 +18,7 @@ import (
     "github.com/json-iterator/go"
 )
 
-
+var Success = 0
 var FileLogPath string
 var ProxyPath string
 var check_time = 1
@@ -96,6 +96,7 @@ func startProcess(url string){
             ImportUser(url, int(check_time))
         }()
         check_time = check_time + 1
+        serviceLogger(fmt.Sprintf("[Count]Success: %d", int(Success)), 32)
         timeSleep(CheckRate)
     }
 }
@@ -144,6 +145,7 @@ func ImportUser(url string, round int) error{
     body = body
     serviceLogger(fmt.Sprintf("[%d]Done~", round), 32)
     //serviceLogger(fmt.Sprintf("[%d]Result: %s", round, string(body)), 32)
+    Success = Success + 1
     return nil
 }
 
