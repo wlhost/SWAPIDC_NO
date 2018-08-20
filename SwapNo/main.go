@@ -1,10 +1,13 @@
 package main
 
 import (
+    "io"
     "os"
     "fmt"
     "time"
     "flag"
+    "bufio"
+    "strconv"
     "strings"
     "os/exec"
     "net/http"
@@ -12,23 +15,38 @@ import (
     "math/rand"
     "path/filepath"
     urlstr "net/url"
+    "github.com/json-iterator/go"
 )
 
 
 var FileLogPath string
+var ProxyPath string
 var check_time = 1
+var ProxyList = make(map[int]map[string]string)
 var (
     url = flag.String("url", "", "The Register Url of SWAPIDC which you want to add users to~~~")
     FileLog = flag.Bool("log", false, "Log the outputs")
+    FileLogLimit = flag.Int("loglimit", 10240, "Log Limit")
+    Proxy = flag.Bool("proxy", false, "Enable proxy mode")
+    ProxyUpdate = flag.Bool("proxyupdate", false, "Update the Proxy list")
     CheckRates = flag.Int("rate", 1, "The rate of the Import Process")
 )
 
 func main() {
     flag.Parse()
     FileLogPath = getCurrentPath() + "/log.txt"
+    ProxyPath = getCurrentPath() + "/proxy.txt"
     serviceLogger("Now Loading...", 0)
     if(*FileLog){
         serviceLogger(fmt.Sprintf("Saving Logs to %s", FileLogPath), 0)
+    }
+    if(*ProxyUpdate){
+        updateProxy()
+        os.Exit(0)
+    }
+    if(*Proxy){
+        serviceLogger(fmt.Sprintf("Enabled Proxy Mode"), 0)
+        loadProxy()
     }
     if(*url == ""){
         serviceLogger("Please input URL!", 31)
@@ -39,32 +57,82 @@ func main() {
     }
 }
 
+func updateProxy(){
+    serviceLogger("Updating Proxy List", 33)
+    client := http.Client{}
+    resp, err := client.Get("https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list")
+    if err != nil {
+        serviceLogger("Update Failed", 31)
+        os.Exit(0)
+    }
+    data, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        serviceLogger("Update Failed, IO Error", 31)
+        os.Exit(0)
+    }
+    err = os.Remove(ProxyPath)
+    if err != nil {
+        serviceLogger(fmt.Sprintf("Old Proxy File Removed Failed, Error: %s", err), 31)
+    } else {
+        serviceLogger("Old File Removed!", 32)
+    }
+    fd, err := os.OpenFile(ProxyPath, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0644)  
+    if(err != nil){
+        serviceLogger(fmt.Sprintf("[%s]Load Error: %s", ProxyPath, err), 31)
+    }else{
+        buf := []byte(string(data))  
+        fd.Write(buf)  
+        fd.Close()
+    }
+    serviceLogger(fmt.Sprintf("Proxy Updated"), 32)
+}
+
 func startProcess(url string){
     var CheckRate = int(*CheckRates)
-    ch := make(chan string, 1)
     serviceLogger(fmt.Sprintf("Loaded ImportRate : %d Second", int(CheckRate)), 32)
     for {
         serviceLogger(fmt.Sprintf("Start Importing, Round %d", int(check_time)), 0)   
         go func() {
             ImportUser(url, int(check_time))
-            ch <- "done"
         }()
-        select {
-        case <-ch:
-            serviceLogger(fmt.Sprintf("Task(%d) Is Done!!!!!", int(check_time)), 32)
-        case <-time.After(time.Duration(CheckRate - 1) * time.Second):
-            serviceLogger(fmt.Sprintf("Task(%d) Is Timeout!!!!!", int(check_time)), 31)
-        }
         check_time = check_time + 1
         timeSleep(CheckRate)
     }
 }
 
 func ImportUser(url string, round int) error{
-    resstr := createRandomUser()
-    resp, err := http.PostForm(url, resstr)
+    resstr := createRandomUser(round)
+    var client http.Client
+    var hostV map[string]string
+    if(*Proxy){
+        hostV = getRandomProxy()
+        if(hostV["status"] != "Success"){
+            serviceLogger(fmt.Sprintf("Round %d, Error: Get Proxy Failed", round), 31)
+        }else{
+            serviceLogger(fmt.Sprintf("Round %d, Using Proxy: %s", round, hostV["host"]), 31)
+            urlc := urlstr.URL{}
+            urlproxy, _ := urlc.Parse(hostV["host"])
+            client = http.Client{
+                Transport: &http.Transport{
+                    Proxy: http.ProxyURL(urlproxy),
+                },
+            }
+        }
+    }else{
+        client = http.Client{}
+    }
+    resp, err := client.PostForm(url, resstr)
     if err != nil {
         serviceLogger(fmt.Sprintf("Round %d, Error: %s", round, err), 31)
+        if(*Proxy){
+            vint, err := strconv.Atoi(hostV["id"]) 
+            if(err != nil){
+                serviceLogger(fmt.Sprintf("Round %d, Int Error: %s", round, err), 31)
+            }else{
+                serviceLogger(fmt.Sprintf("Round %d, Removed Proxy(%s): %s", round, hostV["id"], hostV["host"]), 31)
+                ProxyList[vint]["available"] = "false"
+            }
+        }
         return nil
     }
     defer resp.Body.Close()
@@ -74,11 +142,61 @@ func ImportUser(url string, round int) error{
         return nil
     }
     body = body
-    serviceLogger(fmt.Sprintf("Done~"), 32)
+    serviceLogger(fmt.Sprintf("[%d]Done~", round), 32)
+    //serviceLogger(fmt.Sprintf("[%d]Result: %s", round, string(body)), 32)
     return nil
 }
 
-func createRandomUser() urlstr.Values{
+func loadProxy(){
+    fi, err := os.Open(ProxyPath)
+    if err != nil {
+        fmt.Printf("Error: %s\n", err)
+        return
+    }
+    defer fi.Close()
+    br := bufio.NewReader(fi)
+    for {
+        a, _, c := br.ReadLine()
+        if c == io.EOF {
+            break
+        }
+        initSingleProxy(string(a))
+    }
+    serviceLogger(fmt.Sprintf("Loaded %d Proxys", len(ProxyList)), 32)
+}
+
+func initSingleProxy(str string){
+    strb := []byte(str)
+    anonymity := jsoniter.Get(strb, "anonymity").ToString()
+    host := jsoniter.Get(strb, "host").ToString()
+    port := jsoniter.Get(strb, "port").ToString()
+    from := jsoniter.Get(strb, "from").ToString()
+    vtype := jsoniter.Get(strb, "type").ToString()
+    response_time := jsoniter.Get(strb, "response_time").ToString()
+    proxymap := make(map[string]string)
+    proxymap["host"] = vtype + "://" + host + ":" + port
+    proxymap["available"] = "true"
+    ProxyList[len(ProxyList) + 1] = proxymap
+    serviceLogger(fmt.Sprintf("Loaded Proxy: %s:%s(%s), Anonymity: %s, From: %s", host, port, response_time, anonymity, from), 32)
+}
+
+func getRandomProxy() map[string]string{
+    returnV := make(map[string]string)
+    for i := 1; i <= len(ProxyList); i++ {
+        vid := rand.Intn(len(ProxyList))
+        sproxy := ProxyList[vid]
+        if(sproxy["available"] == "true"){
+            returnV["status"] = "Success"
+            returnV["host"] = sproxy["host"]
+            returnV["id"] = strconv.Itoa(vid)
+            return returnV
+        }
+    }
+    returnV["status"] = "Error"
+    return returnV
+}
+
+func createRandomUser(round int) urlstr.Values{
     username := getRandomString(10)
     password := getRandomString(10)
     email := getRandomString(10) + "@" + getRandomString(3) + ".com"
@@ -97,7 +215,7 @@ func createRandomUser() urlstr.Values{
         "zip" : {zip},
         "phone" : {phone},
     }
-    serviceLogger(fmt.Sprintf("Random Username: %s, Email: %s, Password %s, Phone: %s", username, email, password, phone), 33)
+    serviceLogger(fmt.Sprintf("[%d]Random Username: %s, Email: %s, Password %s, Phone: %s", round, username, email, password, phone), 33)
     return uuu
 }
 
@@ -128,6 +246,7 @@ func timeSleep(second int){
 }
 
 func serviceLogger(log string, color int){
+    checkLogOverSized()
     log = strings.Replace(log, "\n", "", -1)
     if(color == 0){
         fmt.Printf("%s\n", log)
@@ -146,6 +265,29 @@ func serviceLogger(log string, color int){
             fd.Close()
         }
     }
+}
+
+func checkLogOverSized(){
+    logInfo := getSize(FileLogPath)
+    if((int(logInfo) / 1024) >= int(*FileLogLimit) && int(*FileLogLimit) > 0){
+        fmt.Printf("%c[1;0;%dm%s%c[0m\n", 0x1B, 31, "Log Oversized, Cleaning!", 0x1B)
+        err := os.Remove(FileLogPath)
+        if err != nil {
+            fmt.Printf("%c[1;0;%dm%s%c[0m\n", 0x1B, 31, fmt.Sprintf("Log Remove Error: %s !", err), 0x1B)
+        } else {
+            fmt.Printf("%c[1;0;%dm%s%c[0m\n", 0x1B, 32, "Log Cleaned!", 0x1B)
+        }
+    }
+}
+
+func getSize(path string) int64 {
+    fileInfo, err := os.Stat(path)
+    if err != nil {
+        serviceLogger(fmt.Sprintf("Error: %v!", err), 31)
+        return 0
+    }
+    fileSize := fileInfo.Size()
+    return fileSize
 }
 
 func getCurrentPath() string {  
