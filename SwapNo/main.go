@@ -91,7 +91,7 @@ func startProcess(url string){
     var CheckRate = int(*CheckRates)
     serviceLogger(fmt.Sprintf("Loaded ImportRate : %d Second", int(CheckRate)), 32)
     for {
-        serviceLogger(fmt.Sprintf("Start Importing, Round %d", int(check_time)), 0)   
+        serviceLogger(fmt.Sprintf("[%d]Start Importing!", int(check_time)), 0)   
         go func() {
             ImportUser(url, int(check_time))
         }()
@@ -107,9 +107,9 @@ func ImportUser(url string, round int) error{
     if(*Proxy){
         hostV = getRandomProxy()
         if(hostV["status"] != "Success"){
-            serviceLogger(fmt.Sprintf("Round %d, Error: Get Proxy Failed", round), 31)
+            serviceLogger(fmt.Sprintf("[%d]Error: Get Proxy Failed", round), 31)
         }else{
-            serviceLogger(fmt.Sprintf("Round %d, Using Proxy: %s", round, hostV["host"]), 31)
+            serviceLogger(fmt.Sprintf("[%d]Using Proxy: %s", round, hostV["host"]), 31)
             urlc := urlstr.URL{}
             urlproxy, _ := urlc.Parse(hostV["host"])
             client = http.Client{
@@ -123,13 +123,13 @@ func ImportUser(url string, round int) error{
     }
     resp, err := client.PostForm(url, resstr)
     if err != nil {
-        serviceLogger(fmt.Sprintf("Round %d, Error: %s", round, err), 31)
+        serviceLogger(fmt.Sprintf("[%d]Error: %s", round, err), 31)
         if(*Proxy){
             vint, err := strconv.Atoi(hostV["id"]) 
             if(err != nil){
-                serviceLogger(fmt.Sprintf("Round %d, Int Error: %s", round, err), 31)
+                serviceLogger(fmt.Sprintf("[%d]Int Error: %s", round, err), 31)
             }else{
-                serviceLogger(fmt.Sprintf("Round %d, Removed Proxy(%s): %s", round, hostV["id"], hostV["host"]), 31)
+                serviceLogger(fmt.Sprintf("[%d]Removed Proxy(%s): %s", round, hostV["id"], hostV["host"]), 31)
                 ProxyList[vint]["available"] = "false"
             }
         }
@@ -138,7 +138,7 @@ func ImportUser(url string, round int) error{
     defer resp.Body.Close()
     body, err := ioutil.ReadAll(resp.Body)
     if err != nil {
-        serviceLogger(fmt.Sprintf("Round %d, Error: %s", round, err), 31)
+        serviceLogger(fmt.Sprintf("[%d]Error: %s", round, err), 31)
         return nil
     }
     body = body
@@ -277,12 +277,12 @@ func serviceLogger(log string, color int){
 func checkLogOverSized(){
     logInfo := getSize(FileLogPath)
     if((int(logInfo) / 1024) >= int(*FileLogLimit) && int(*FileLogLimit) > 0){
-        fmt.Printf("%c[1;0;%dm%s%c[0m\n", 0x1B, 31, "Log Oversized, Cleaning!", 0x1B)
+        fmt.Printf("%c[1;0;%dm[Error]%s%c[0m\n", 0x1B, 31, "[Log]Log Oversized, Cleaning!", 0x1B)
         err := os.Remove(FileLogPath)
         if err != nil {
-            fmt.Printf("%c[1;0;%dm%s%c[0m\n", 0x1B, 31, fmt.Sprintf("Log Remove Error: %s !", err), 0x1B)
+            fmt.Printf("%c[1;0;%dm%s%c[0m\n", 0x1B, 31, fmt.Sprintf("[Log]Log Remove Error: %s !", err), 0x1B)
         } else {
-            fmt.Printf("%c[1;0;%dm%s%c[0m\n", 0x1B, 32, "Log Cleaned!", 0x1B)
+            fmt.Printf("%c[1;0;%dm%s%c[0m\n", 0x1B, 32, "[Log]Log Cleaned!", 0x1B)
         }
     }
 }
