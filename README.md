@@ -2,6 +2,7 @@
 Add random Users and Tickets to SWAPIDC
 
 ### Usage(You can get the build version in Releases)
+* go get github.com/json-iterator/go
 * go build
 * ./SwapNo -log -rate 5 -url https://www.site.com/index/register/
 
