@@ -91,7 +91,11 @@ func updateProxy(){
 
 func startProcess(url string){
     var CheckRate = int(*CheckRates)
-    serviceLogger(fmt.Sprintf("Loaded ImportRate : %d Second", int(CheckRate)), 32)
+    if(*OverClock){
+        serviceLogger(fmt.Sprintf("Loaded ImportRate : %d Millisecond", int(CheckRate)), 32)
+    }else{
+        serviceLogger(fmt.Sprintf("Loaded ImportRate : %d Second", int(CheckRate)), 32)
+    }
     for {
         serviceLogger(fmt.Sprintf("[%d]Start Importing!", int(check_time)), 0)   
         go func() {
