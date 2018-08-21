@@ -183,7 +183,8 @@ func initSingleProxy(str string){
     proxymap["host"] = vtype + "://" + host + ":" + port
     proxymap["available"] = "true"
     ProxyList[len(ProxyList) + 1] = proxymap
-    serviceLogger(fmt.Sprintf("Loaded Proxy: %s:%s(%s), Anonymity: %s, From: %s", host, port, response_time, anonymity, from), 32)
+    //serviceLogger(fmt.Sprintf("Loaded Proxy: %s:%s(%s), Anonymity: %s, From: %s", host, port, response_time, anonymity, from), 32)
+    fmt.Sprintf("Loaded Proxy: %s:%s(%s), Anonymity: %s, From: %s", host, port, response_time, anonymity, from)
 }
 
 func getRandomProxy() map[string]string{
