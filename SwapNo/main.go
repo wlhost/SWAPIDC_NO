@@ -101,7 +101,18 @@ func startProcess(url string){
 }
 
 func ImportUser(url string, round int) error{
-    resstr := createRandomUser(round)
+    resstrR := createRandomUser(round)
+    uuu := urlstr.Values{
+        "username": {resstrR["username"]},
+        "password" : {resstrR["password"]},
+        "repassword" : {resstrR["password"]},
+        "email" : {resstrR["email"]},
+        "name" : {resstrR["name"]},
+        "country" : {"China"},
+        "address" : {resstrR["address"]},
+        "zip" : {resstrR["zip"]},
+        "phone" : {resstrR["phone"]},
+    }
     var client http.Client
     var hostV map[string]string
     if(*Proxy){
@@ -121,7 +132,7 @@ func ImportUser(url string, round int) error{
     }else{
         client = http.Client{}
     }
-    resp, err := client.PostForm(url, resstr)
+    resp, err := client.PostForm(url, uuu)
     if err != nil {
         serviceLogger(fmt.Sprintf("[%d]Error: %s", round, err), 31)
         if(*Proxy){
@@ -142,7 +153,7 @@ func ImportUser(url string, round int) error{
         return nil
     }
     body = body
-    serviceLogger(fmt.Sprintf("[%d]Done~", round), 32)
+    serviceLogger(fmt.Sprintf("[%d]Done~ Random Username: %s, Email: %s, Password %s, Phone: %s", round, resstrR["username"], resstrR["email"], resstrR["password"], resstrR["phone"]), 32)
     //serviceLogger(fmt.Sprintf("[%d]Result: %s", round, string(body)), 32)
     addSuccess()
     return nil
@@ -203,27 +214,16 @@ func getRandomProxy() map[string]string{
     return returnV
 }
 
-func createRandomUser(round int) urlstr.Values{
-    username := getRandomString(10)
-    password := getRandomString(10)
-    email := getRandomString(10) + "@" + getRandomString(3) + ".com"
-    name := getRandomString(5)
-    address := getRandomString(10)
-    zip := getRandomStringInt(10)
-    phone := getRandomStringInt(11)
-    uuu := urlstr.Values{
-        "username": {username},
-        "password" : {password},
-        "repassword" : {password},
-        "email" : {email},
-        "name" : {name},
-        "country" : {"China"},
-        "address" : {address},
-        "zip" : {zip},
-        "phone" : {phone},
-    }
-    serviceLogger(fmt.Sprintf("[%d]Random Username: %s, Email: %s, Password %s, Phone: %s", round, username, email, password, phone), 33)
-    return uuu
+func createRandomUser(round int) map[string]string{
+    strR := make(map[string]string)
+    strR["username"] = getRandomString(10)
+    strR["password"] = getRandomString(10)
+    strR["email"] = getRandomString(10) + "@" + getRandomString(3) + ".com"
+    strR["name"] = getRandomString(5)
+    strR["address"] = getRandomString(10)
+    strR["zip"] = getRandomStringInt(10)
+    strR["phone"] = "156" + getRandomStringInt(8)
+    return strR
 }
 
 func getRandomString(length int) string{
