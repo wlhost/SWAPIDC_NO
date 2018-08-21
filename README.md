@@ -13,5 +13,5 @@ Add random users to SWAPIDC
 * -rate The rate of the Import Process(s)
 * -url The Register Url of SWAPIDC which you want to add users to~~~
 
-### Simple
+### Simple Sample
 ```./SwapNo -log -proxy -rate 2 -url https://site.com/index/register/```
