@@ -17,9 +17,13 @@ Add random Users and Tickets to SWAPIDC
 * -tickets Enable Ticket Mode
 * -ticketurl The Ticket Url of SWAPIDC which you want to add tickets to~~~
 * -ticketprocess The Amount of Process to open tickets
+* -saveusers Save the registered Users
 
 ### Simple Sample
 ```./SwapNo -log -proxy -rate 2 -url https://site.com/index/register/```
+
+### SaveUsers Mode
+```./SwapNo -log -proxy -rate 2 -url https://site.com/index/register/ -saveusers```
 
 ### OverClock Mode
 ```./SwapNo -log -proxy -rate 20 -url https://site.com/index/register/ -overclock```

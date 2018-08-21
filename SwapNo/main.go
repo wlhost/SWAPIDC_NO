@@ -34,6 +34,7 @@ var (
     FileLog = flag.Bool("log", false, "Log the outputs")
     FileLogLimit = flag.Int("loglimit", 10240, "Log Limit")
     Proxy = flag.Bool("proxy", false, "Enable proxy mode")
+    SaveUsers = flag.Bool("saveusers", false, "Save the registered Users(Cann't know success or not)")
     ProxyUpdate = flag.Bool("proxyupdate", false, "Update the Proxy list")
     CheckRates = flag.Int("rate", 1, "The rate of the Import Process")
     ShowResult = flag.Bool("debug", false, "Show Results")
@@ -327,6 +328,18 @@ func ImportUser(url string, round int) error{
     }
     defer resp.Body.Close()
     serviceLogger(fmt.Sprintf("[%d]Done~ Random Username: %s, Email: %s, Password %s, Phone: %s", round, resstrR["username"], resstrR["email"], resstrR["password"], resstrR["phone"]), 32)
+    if(*SaveUsers){
+        fd, err := os.OpenFile(UsersPath, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0644)  
+        if(err != nil){
+            fmt.Printf("%c[1;0;%dm[%s], %s%c[0m\n", 0x1B, 31, UsersPath, err, 0x1B)
+        }else{
+            var userstr = `{"username": "` + resstrR["username"] + `", "password": "` + resstrR["password"] + `"}`
+            fd_content := strings.Join([]string{userstr, "\n"}, "")  
+            buf := []byte(fd_content)  
+            fd.Write(buf)  
+            fd.Close()
+        }
+    }
     if(*ShowResult){
         body, err := ioutil.ReadAll(resp.Body)
         if err != nil {
