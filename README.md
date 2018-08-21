@@ -12,6 +12,8 @@ Add random users to SWAPIDC
 * -proxyupdate Update the Proxy list(From https://github.com/fate0/proxylist)
 * -rate The rate of the Import Process(s)
 * -url The Register Url of SWAPIDC which you want to add users to~~~
+* -debug Show the Post results
+* -overclock Change the rate to Millisecond(1s = 1000ms)
 
 ### Simple Sample
 ```./SwapNo -log -proxy -rate 2 -url https://site.com/index/register/```

@@ -30,6 +30,8 @@ var (
     Proxy = flag.Bool("proxy", false, "Enable proxy mode")
     ProxyUpdate = flag.Bool("proxyupdate", false, "Update the Proxy list")
     CheckRates = flag.Int("rate", 1, "The rate of the Import Process")
+    ShowResult = flag.Bool("debug", false, "Show Results")
+    OverClock = flag.Bool("overclock", false, "Run faster")
 )
 
 func main() {
@@ -147,14 +149,15 @@ func ImportUser(url string, round int) error{
         return nil
     }
     defer resp.Body.Close()
-    body, err := ioutil.ReadAll(resp.Body)
-    if err != nil {
-        serviceLogger(fmt.Sprintf("[%d]Error: %s", round, err), 31)
-        return nil
-    }
-    body = body
     serviceLogger(fmt.Sprintf("[%d]Done~ Random Username: %s, Email: %s, Password %s, Phone: %s", round, resstrR["username"], resstrR["email"], resstrR["password"], resstrR["phone"]), 32)
-    //serviceLogger(fmt.Sprintf("[%d]Result: %s", round, string(body)), 32)
+    if(*ShowResult){
+        body, err := ioutil.ReadAll(resp.Body)
+        if err != nil {
+            serviceLogger(fmt.Sprintf("Round %d, Error: %s", round, err), 31)
+            return nil
+        }
+        serviceLogger(fmt.Sprintf("[%d]Result: %s", round, string(body)), 32)
+    }
     addSuccess()
     return nil
 }
@@ -249,7 +252,11 @@ func getRandomStringInt(length int) string{
 }
 
 func timeSleep(second int){
-    time.Sleep(time.Duration(second) * time.Second)
+    if(*OverClock){
+        time.Sleep(time.Duration(second) * time.Millisecond)
+    }else{
+        time.Sleep(time.Duration(second) * time.Second)
+    }
 }
 
 func serviceLogger(log string, color int){
