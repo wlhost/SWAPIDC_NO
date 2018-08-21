@@ -15,16 +15,22 @@ import (
     "math/rand"
     "path/filepath"
     urlstr "net/url"
+    "net/http/cookiejar"
     "github.com/json-iterator/go"
 )
 
 var Success = 0
 var FileLogPath string
 var ProxyPath string
-var check_time = 1
+var UsersPath string
+var check_time = 0
+var TProcesss = 0
 var ProxyList = make(map[int]map[string]string)
+var UserList = make(map[int]map[string]string)
+
 var (
     url = flag.String("url", "", "The Register Url of SWAPIDC which you want to add users to~~~")
+    TicketUrl = flag.String("ticketurl", "", "The Ticket Url of SWAPIDC which you want to add tickets to~~~")
     FileLog = flag.Bool("log", false, "Log the outputs")
     FileLogLimit = flag.Int("loglimit", 10240, "Log Limit")
     Proxy = flag.Bool("proxy", false, "Enable proxy mode")
@@ -32,12 +38,15 @@ var (
     CheckRates = flag.Int("rate", 1, "The rate of the Import Process")
     ShowResult = flag.Bool("debug", false, "Show Results")
     OverClock = flag.Bool("overclock", false, "Run faster")
+    TicketMode = flag.Bool("tickets", false, "I love Tickets")
+    TicketProcess = flag.Int("ticketprocess", 10, "Tickets Process")
 )
 
 func main() {
     flag.Parse()
     FileLogPath = getCurrentPath() + "/log.txt"
     ProxyPath = getCurrentPath() + "/proxy.txt"
+    UsersPath = getCurrentPath() + "/users.txt"
     serviceLogger("Now Loading...", 0)
     if(*FileLog){
         serviceLogger(fmt.Sprintf("Saving Logs to %s", FileLogPath), 0)
@@ -45,6 +54,10 @@ func main() {
     if(*ProxyUpdate){
         updateProxy()
         os.Exit(0)
+    }
+    if(*TicketMode){
+        serviceLogger(fmt.Sprintf("Running in Ticket Mode, Process: %d", *TicketProcess), 0)
+        loadUsers()
     }
     if(*Proxy){
         serviceLogger(fmt.Sprintf("Enabled Proxy Mode"), 0)
@@ -96,14 +109,174 @@ func startProcess(url string){
     }else{
         serviceLogger(fmt.Sprintf("Loaded ImportRate : %d Second", int(CheckRate)), 32)
     }
-    for {
-        serviceLogger(fmt.Sprintf("[%d]Start Importing!", int(check_time)), 0)   
-        go func() {
-            ImportUser(url, int(check_time))
-        }()
-        check_time = check_time + 1
-        timeSleep(CheckRate)
+    if(*TicketMode){
+        for {
+            serviceLogger(fmt.Sprintf("[%d]Start Opening!", int(check_time) + 1), 0)   
+            if(TProcesss <= int(*TicketProcess)){
+                go func() {
+                    ImportTicket(url, int(check_time))
+                    TProcesss = TProcesss - 1
+                }()
+                check_time = check_time + 1
+            }
+            timeSleep(CheckRate)
+        }
+    }else{
+        for {
+            serviceLogger(fmt.Sprintf("[%d]Start Importing!", int(check_time) + 1), 0)   
+            go func() {
+                ImportUser(url, int(check_time))
+            }()
+            check_time = check_time + 1
+            timeSleep(CheckRate)
+        }
     }
+}
+
+func ImportTicket(url string, round int) error{
+    TProcesss = TProcesss + 1
+    var client http.Client
+    var hostV map[string]string
+    if(*Proxy){
+        hostV = getRandomProxy()
+        if(hostV["status"] != "Success"){
+            serviceLogger(fmt.Sprintf("[%d]Error: Get Proxy Failed", round), 31)
+        }else{
+            serviceLogger(fmt.Sprintf("[%d]Using Proxy: %s", round, hostV["host"]), 31)
+            urlc := urlstr.URL{}
+            urlproxy, _ := urlc.Parse(hostV["host"])
+            client = http.Client{
+                Transport: &http.Transport{
+                    Proxy: http.ProxyURL(urlproxy),
+                },
+            }
+        }
+    }else{
+        client = http.Client{}
+    }
+    jar, err := cookiejar.New(nil)
+    if err != nil {
+        serviceLogger(fmt.Sprintf("[%d]Get CookieJar Failed. Error: %s", round, err), 31)
+        return nil
+    }
+    client.Jar = jar
+    userV := getRandomUser()
+    uuu := urlstr.Values{
+        "swapname" : {userV["username"]},
+        "swappass" : {userV["password"]},
+    }
+    resp, err := client.PostForm(url, uuu)
+    if err != nil {
+        serviceLogger(fmt.Sprintf("[%d]Error: %s", round, err), 31)
+        if(*Proxy){
+            vint, err := strconv.Atoi(hostV["id"]) 
+            if(err != nil){
+                serviceLogger(fmt.Sprintf("[%d]Int Error: %s", round, err), 31)
+            }else{
+                serviceLogger(fmt.Sprintf("[%d]Removed Proxy(%s): %s", round, hostV["id"], hostV["host"]), 31)
+                ProxyList[vint]["available"] = "false"
+            }
+        }
+        return nil
+    }
+    defer resp.Body.Close()
+    if(*ShowResult){
+        body, err := ioutil.ReadAll(resp.Body)
+        if err != nil {
+            serviceLogger(fmt.Sprintf("Round %d, Error: %s", round, err), 31)
+            return nil
+        }
+        serviceLogger(fmt.Sprintf("[%d]Result: %s", round, string(body)), 32)
+    }
+    for {
+        serviceLogger(fmt.Sprintf("[%d]Start Ticketing!", int(check_time) + 1), 0)  
+        rttket := getRandomTicket() 
+        uuu := urlstr.Values{
+            "name": {rttket["name"]},
+            "email" : {rttket["email"]},
+            "subject" : {rttket["subject"]},
+            "message" : {rttket["message"]},
+        }
+        resp1, err := client.PostForm(*TicketUrl, uuu)
+        if err != nil {
+            serviceLogger(fmt.Sprintf("[%d]Error: %s", round, err), 31)
+            if(*Proxy){
+                vint, err := strconv.Atoi(hostV["id"]) 
+                if(err != nil){
+                    serviceLogger(fmt.Sprintf("[%d]Int Error: %s", round, err), 31)
+                }else{
+                    serviceLogger(fmt.Sprintf("[%d]Removed Proxy(%s): %s", round, hostV["id"], hostV["host"]), 31)
+                    ProxyList[vint]["available"] = "false"
+                }
+            }
+            return nil
+        }
+        defer resp1.Body.Close()
+        serviceLogger(fmt.Sprintf("[%d]Done~ Random Ticket Title: %s %s, Email: %s", round, rttket["name"], rttket["lastname"], rttket["email"]), 32)
+        if(*ShowResult){
+            body, err := ioutil.ReadAll(resp1.Body)
+            if err != nil {
+                serviceLogger(fmt.Sprintf("Round %d, Error: %s", round, err), 31)
+                return nil
+            }
+            serviceLogger(fmt.Sprintf("[%d]Result: %s", round, string(body)), 32)
+        }
+        addSuccess()
+        timeSleep(int(*CheckRates))
+    }
+    return nil
+}
+
+func loadUsers(){
+    fi, err := os.Open(UsersPath)
+    if err != nil {
+        fmt.Printf("Error: %s\n", err)
+        return
+    }
+    defer fi.Close()
+    br := bufio.NewReader(fi)
+    for {
+        a, _, c := br.ReadLine()
+        if c == io.EOF {
+            break
+        }
+        initSingleUser(string(a))
+    }
+    serviceLogger(fmt.Sprintf("Loaded %d Users", len(UserList)), 32)
+}
+
+func initSingleUser(str string){
+    strb := []byte(str)
+    username := jsoniter.Get(strb, "username").ToString()
+    password := jsoniter.Get(strb, "password").ToString()
+    usermap := make(map[string]string)
+    usermap["username"] = username
+    usermap["password"] = password
+    UserList[len(UserList) + 1] = usermap
+}
+
+func getRandomUser() map[string]string{
+    returnV := make(map[string]string)
+    for i := 1; i <= len(UserList); i++ {
+        vid := rand.Intn(len(UserList))
+        sproxy := UserList[vid]
+        returnV["status"] = "Success"
+        returnV["username"] = sproxy["username"]
+        returnV["password"] = sproxy["password"]
+        returnV["id"] = strconv.Itoa(vid)
+        return returnV
+    }
+    returnV["status"] = "Error"
+    return returnV
+}
+
+func getRandomTicket()map[string]string{
+    strR := make(map[string]string)
+    strR["name"] = getRandomString(5)
+    strR["email"] = getRandomString(10) + "@" + getRandomString(3) + ".com"
+    strR["subject"] = getRandomString(5)
+    strR["message"] = getRandomString(10)
+    return strR
 }
 
 func ImportUser(url string, round int) error{
